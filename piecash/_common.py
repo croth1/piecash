@@ -1,4 +1,5 @@
 import locale
+from fractions import Fraction
 
 from decimal import Decimal
 from sqlalchemy import Column, VARCHAR, INTEGER, cast, Float
@@ -82,24 +83,19 @@ def hybrid_property_gncnumeric(num_col, denom_col):
             num, denom = None, None
         else:
             if isinstance(d, tuple):
-                d = Decimal(d[0]) / d[1]
-            elif isinstance(d, (int, int, str)):
-                d = Decimal(d)
+                d = Fraction(d[0], d[1])
+            elif isinstance(d, (int, str)):
+                d = Fraction(d)
+            elif isinstance(d, Decimal):
+                d = Fraction(d)
             elif isinstance(d, float):
                 raise TypeError(("Received a floating-point number {} where a decimal is expected. " +
                                  "Use a Decimal, str, or int instead").format(d))
-            elif not isinstance(d, Decimal):
-                raise TypeError(("Received an unknown type {} where a decimal is expected. " +
-                                 "Use a Decimal, str, or int instead").format(type(d).__name__))
+            elif not isinstance(d, Fraction):
+                raise TypeError(("Received an unknown type {} where a fraction is expected. " +
+                                 "Use a Fraction, Decimal, str, or int instead").format(type(d).__name__))
 
-            sign, digits, exp = d.as_tuple()
-            denom = 10 ** max(-exp, 0)
-
-            denom_basis = getattr(self, "{}_basis".format(denom_name), None)
-            if denom_basis is not None:
-                denom = denom_basis
-
-            num = int(d * denom)
+            num, denom = d.numerator, d.denominator
             if not ((-MAX_NUMBER < num < MAX_NUMBER) and (-MAX_NUMBER < denom < MAX_NUMBER)):
                 raise ValueError(("The amount '{}' cannot be represented in GnuCash. " +
                                   "Either it is too large or it has too many decimals").format(d))
@@ -112,7 +108,7 @@ def hybrid_property_gncnumeric(num_col, denom_col):
         if num is None:
             return
         else:
-            return Decimal(num) / denom
+            return Fraction(num, denom)
 
     def expr(cls):
         # todo: cast into Decimal for postgres and for sqlite (for the latter, use sqlite3.register_converter ?)
